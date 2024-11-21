@@ -107,23 +107,16 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 void shakeWindow(int moveDirection, HWND hWindow) {
     RECT windowRect;
-
-    // Get the current window position
+    
     GetWindowRect(hWindow, &windowRect);
 
-    // Move the window along the X-axis
-    LONG moveAxisX = windowRect.left;
+    int moveOffset = rand() % 15 + 5;
+    int shakeDirection = (rand() % 2 == 0) ? MOVE_LEFT : MOVE_RIGHT;
 
-    if (moveDirection == MOVE_RIGHT) {
-        moveAxisX += 10; // Move 10 pixels to the right
-    }
-    if (moveDirection == MOVE_LEFT) {
-        moveAxisX -= 10; // Move 10 pixels to the left
-    }
-
-    // Set the new window position (only moving on X-axis, keeping Y-axis same)
+    LONG moveAxisX = windowRect.left + (shakeDirection * moveOffset);
     SetWindowPos(hWindow, NULL, moveAxisX, windowRect.top, 0, 0, SWP_NOSIZE);
 }
+
 
 BOOL CALLBACK EnumWindowsProc(HWND hWindow, LPARAM lParam) {
     // Ignore invisible or non-visible windows
@@ -169,6 +162,7 @@ int main(int argc, char** argv) {
     ShowWindow(window, 0);
     HINSTANCE hInstance = GetModuleHandle(NULL);
 
+    srand((unsigned int)time(NULL));
     int currentHoverDirection = MOVE_LEFT;
 
     auto start_time = steady_clock::now();
