@@ -1,7 +1,6 @@
 #include <windows.h>
 #include <string>
 #include <filesystem>
-#include <thread> // For sleep_for in C++
 
 #define MOVE_RIGHT -1
 #define MOVE_LEFT  1
@@ -107,7 +106,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 void shakeWindow(int moveDirection, HWND hWindow) {
     RECT windowRect;
-    
+
     GetWindowRect(hWindow, &windowRect);
 
     int moveOffset = rand() % 15 + 5;
@@ -191,7 +190,7 @@ int main(int argc, char** argv) {
             FakeCrash();
             break;
         }
-        std::this_thread::sleep_for(milliseconds(1));
+        Sleep(1);
     }
     return 0;
 }
