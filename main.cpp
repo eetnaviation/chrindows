@@ -8,8 +8,14 @@
 
 using namespace std::chrono;
 
+HINSTANCE hInst;
+HWND hwnd;
+HDC hdc;
+int width, height;
+
 void SetScreenColor(HWND hwnd, COLORREF color);
 void ExecuteHiddenCommand(const char* command);
+void FakeCrash();
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
@@ -24,6 +30,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     }
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
+
+
 
 void SetScreenColor(HWND hwnd, COLORREF color) {
     HDC hdc = GetDC(hwnd);
@@ -41,11 +49,9 @@ void ExecuteHiddenCommand(const char* command) {
 
     ZeroMemory(&si, sizeof(si));
     si.cb = sizeof(si);
-    // No need to set dwFlags and wShowWindow because we will use CREATE_NO_WINDOW
 
     ZeroMemory(&pi, sizeof(pi));
 
-    // Start the process
     if (!CreateProcess(
             NULL,               // No module name (use command line)
             (LPSTR)command,     // Command line
@@ -58,17 +64,45 @@ void ExecuteHiddenCommand(const char* command) {
             &si,                // Pointer to STARTUPINFO structure
             &pi)                // Pointer to PROCESS_INFORMATION structure
         ) {
-        // Handle error if needed
         MessageBox(NULL, "Failed to execute command", "Error", MB_OK | MB_ICONERROR);
-        return; // Exit the function if command execution fails
+        return;
         }
 
-    // Wait until child process exits.
     WaitForSingleObject(pi.hProcess, INFINITE);
 
-    // Close process and thread handles.
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
+}
+
+COLORREF GetRandomColor() {
+    return RGB(rand() % 256, rand() % 256, rand() % 256);
+}
+
+void CreateGlitchEffect() {
+    for (int i = 0; i < 100; i++) {
+        int x = rand() % width;
+        int y = rand() % height;
+        SetPixel(hdc, x, y, GetRandomColor());
+    }
+}
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_CREATE:
+            srand(time(0));
+        hdc = GetDC(hwnd);
+        break;
+        case WM_PAINT:
+                CreateGlitchEffect();
+        ValidateRect(hwnd, NULL);
+        break;
+        case WM_DESTROY:
+            PostQuitMessage(0);
+        break;
+        default:
+            return DefWindowProc(hwnd, msg, wParam, lParam);
+    }
+    return 0;
 }
 
 void shakeWindow(int moveDirection, HWND hWindow) {
@@ -99,6 +133,35 @@ BOOL CALLBACK EnumWindowsProc(HWND hWindow, LPARAM lParam) {
     return TRUE;
 }
 
+void FakeCrash() {
+    RECT screenRect;
+    GetWindowRect(GetDesktopWindow(), &screenRect);
+    width = screenRect.right - screenRect.left;
+    height = screenRect.bottom - screenRect.top;
+
+    WNDCLASSEXA wc = { sizeof(WNDCLASSEXA), CS_HREDRAW | CS_VREDRAW, WndProc, 0, 0, hInst, NULL, NULL, (HBRUSH)(COLOR_WINDOW+1), NULL, "GlitchOverlayClass", NULL };
+    RegisterClassExA(&wc);
+
+    hwnd = CreateWindowExA(WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW, "GlitchOverlayClass", "Visual Glitch Overlay", WS_POPUP, 0, 0, width, height, NULL, NULL, hInst, NULL);
+
+    if (!hwnd) {
+        MessageBoxA(NULL, "Window Creation Failed!", "Error", MB_ICONEXCLAMATION | MB_OK);
+    }
+
+    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 0, LWA_COLORKEY);
+
+    SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 128, LWA_ALPHA);
+
+    ShowWindow(hwnd, SW_SHOW);
+    UpdateWindow(hwnd);
+
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0) > 0) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+}
+
 int main(int argc, char** argv) {
     HWND window;
     AllocConsole();
@@ -127,9 +190,11 @@ int main(int argc, char** argv) {
             for (int i = 0; i < 1; i++) {
                 for (int j = 0; j < colorCount; j++) {
                     SetScreenColor(hwnd, colors[j]);
+                    Sleep(5);
                 }
             }
             SetScreenColor(hwnd, RGB(255, 255, 255));
+            FakeCrash();
             break;
         }
         std::this_thread::sleep_for(milliseconds(1));
