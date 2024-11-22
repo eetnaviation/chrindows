@@ -1,9 +1,20 @@
 #include <windows.h>
 #include <string>
 #include <filesystem>
+#include <mmsystem.h>
+#include <cstdlib>
+#include <ctime>
+#include <cmath>
+#include <thread>
+#include <atomic>
 
 #define MOVE_RIGHT -1
 #define MOVE_LEFT  1
+
+#pragma comment(lib, "winmm.lib")
+
+std::atomic<bool> keepRunning(true);
+std::atomic<bool> triggerSpecialEffects(false);
 
 using namespace std::chrono;
 
@@ -78,7 +89,7 @@ COLORREF GetRandomColor() {
 }
 
 void CreateGlitchEffect() {
-    for (int i = 0; i < 100; i++) {
+    for (int i = 0; i < 50000000; i++) {
         int x = rand() % width;
         int y = rand() % height;
         SetPixel(hdc, x, y, GetRandomColor());
@@ -125,7 +136,7 @@ BOOL CALLBACK EnumWindowsProc(HWND hWindow, LPARAM lParam) {
     return TRUE;
 }
 
-void FakeCrash() {
+void GenerateRandomPixels() {
     RECT screenRect;
     GetWindowRect(GetDesktopWindow(), &screenRect);
     width = screenRect.right - screenRect.left;
@@ -154,6 +165,107 @@ void FakeCrash() {
     }
 }
 
+void generateSquareWave(unsigned char* buffer, size_t size, int frequency, int sampleRate) {
+    for (size_t i = 0; i < size; ++i) {
+        double t = static_cast<double>(i) / sampleRate;
+        buffer[i] = (sin(2 * M_PI * frequency * t) > 0) ? 255 : 0;
+    }
+}
+
+void generateSawtoothWave(unsigned char* buffer, size_t size, int frequency, int sampleRate) {
+    for (size_t i = 0; i < size; ++i) {
+        double t = static_cast<double>(i) / sampleRate;
+        buffer[i] = static_cast<unsigned char>(255 * (fmod(frequency * t, 1.0)));
+    }
+}
+
+void generateSineWave(unsigned char* buffer, size_t size, int frequency, int sampleRate) {
+    for (size_t i = 0; i < size; ++i) {
+        double t = static_cast<double>(i) / sampleRate;
+        buffer[i] = static_cast<unsigned char>(127 + 127 * sin(2 * M_PI * frequency * t));
+    }
+}
+
+void generateRandomNoise(unsigned char* buffer, size_t size) {
+    for (size_t i = 0; i < size; ++i) {
+        buffer[i] = rand() % 256;
+    }
+}
+
+void generateRandomizedAudio(unsigned char* buffer, size_t size, int sampleRate) {
+    size_t i = 0;
+    while (i < size) {
+        int chunkSize = rand() % (sampleRate / 4);
+        int type = triggerSpecialEffects ? (rand() % 4) : (rand() % 2);
+
+        if (type == 0) {
+            int frequency = 200 + rand() % 1800;
+            size_t chunkEnd = std::min(i + chunkSize, size);
+            generateSineWave(buffer + i, chunkEnd - i, frequency, sampleRate);
+        } else if (type == 1) {
+            size_t chunkEnd = std::min(i + chunkSize, size);
+            generateRandomNoise(buffer + i, chunkEnd - i);
+        } else if (type == 2) {
+            int frequency = 300 + rand() % 1500;
+            size_t chunkEnd = std::min(i + chunkSize, size);
+            generateSquareWave(buffer + i, chunkEnd - i, frequency, sampleRate);
+        } else if (type == 3) {
+            int frequency = 300 + rand() % 1500;
+            size_t chunkEnd = std::min(i + chunkSize, size);
+            generateSawtoothWave(buffer + i, chunkEnd - i, frequency, sampleRate);
+        }
+        i += chunkSize;
+    }
+}
+
+void playRandomAudio() {
+    srand(static_cast<unsigned int>(time(nullptr)));
+
+    const int SAMPLE_RATE = 44100;
+    const int BUFFER_SIZE = SAMPLE_RATE * 1;
+
+    WAVEFORMATEX waveFormat = {};
+    waveFormat.wFormatTag = WAVE_FORMAT_PCM;
+    waveFormat.nChannels = 1;
+    waveFormat.nSamplesPerSec = SAMPLE_RATE;
+    waveFormat.nAvgBytesPerSec = SAMPLE_RATE;
+    waveFormat.nBlockAlign = 1;
+    waveFormat.wBitsPerSample = 8;
+
+    HWAVEOUT hWaveOut;
+    if (waveOutOpen(&hWaveOut, WAVE_MAPPER, &waveFormat, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
+        return;
+    }
+
+    unsigned char* audioData = new unsigned char[BUFFER_SIZE];
+    WAVEHDR waveHeader = {};
+
+    while (keepRunning) {
+        generateRandomizedAudio(audioData, BUFFER_SIZE, SAMPLE_RATE);
+
+        waveHeader.lpData = reinterpret_cast<LPSTR>(audioData);
+        waveHeader.dwBufferLength = BUFFER_SIZE;
+        waveHeader.dwFlags = 0;
+        waveOutPrepareHeader(hWaveOut, &waveHeader, sizeof(WAVEHDR));
+
+        waveOutWrite(hWaveOut, &waveHeader, sizeof(WAVEHDR));
+
+        while (!(waveHeader.dwFlags & WHDR_DONE)) {
+            Sleep(10);
+        }
+
+        waveOutUnprepareHeader(hWaveOut, &waveHeader, sizeof(WAVEHDR));
+    }
+
+    waveOutClose(hWaveOut);
+    delete[] audioData;
+}
+
+void startRandomAudio() {
+    std::thread audioThread(playRandomAudio);
+    audioThread.detach();
+}
+
 int main(int argc, char** argv) {
     HWND window;
     AllocConsole();
@@ -166,6 +278,8 @@ int main(int argc, char** argv) {
 
     auto start_time = steady_clock::now();
     auto next_function1_time = steady_clock::now();
+
+    startRandomAudio();
 
     while (true) {
         auto current_time = steady_clock::now();
@@ -187,7 +301,9 @@ int main(int argc, char** argv) {
                 }
             }
             SetScreenColor(hwnd, RGB(255, 255, 255));
-            FakeCrash();
+            triggerSpecialEffects = !triggerSpecialEffects;
+            GenerateRandomPixels();
+            keepRunning = false;
             break;
         }
         Sleep(1);

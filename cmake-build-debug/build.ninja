@@ -66,7 +66,7 @@ build CMakeFiles/chrindows.dir/main.cpp.obj: CXX_COMPILER__chrindows_unscanned_D
 build chrindows.exe: CXX_EXECUTABLE_LINKER__chrindows_Debug CMakeFiles/chrindows.dir/main.cpp.obj
   FLAGS = -static-libstdc++ -static-libgcc -g
   LINK_FLAGS = -static
-  LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  LINK_LIBRARIES = -lwinmm  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\chrindows.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
